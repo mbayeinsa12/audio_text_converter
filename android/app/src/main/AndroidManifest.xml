@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <!-- Pour Android 10 (API 29) et supérieur, WRITE_EXTERNAL_STORAGE est déprécié.
+         Considérez l'utilisation du stockage scope ou MediaStore pour sauvegarder les fichiers.
+         Pour cette application, c'est principalement pour le microphone et internet. -->
+    <queries>
+        <!-- Si votre application interroge toutes les applications sur l'appareil qui peuvent gérer une intention spécifique,
+             vous devrez le déclarer dans votre AndroidManifest.xml.
+             Pour speech_to_text et flutter_tts, ceux-ci sont généralement couverts par des intentions système.
+             Cependant, si des problèmes surviennent, envisagez d'ajouter des requêtes d'intention spécifiques. -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.tts.action.SYNTHESIZE_SPEECH" />
+        </intent>
+    </queries>
+    ...
+</manifest>

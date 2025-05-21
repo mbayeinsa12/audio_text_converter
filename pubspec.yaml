@@ -1,0 +1,31 @@
+name: audio_text_converter
+description: A new Flutter project.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  speech_to_text: ^6.6.1 # Pour la transcription audio en texte
+  flutter_tts: ^4.0.2 # Pour la conversion de texte en audio
+  permission_handler: ^11.1.0 # Pour gérer les permissions (micro, stockage)
+  path_provider: ^2.1.2 # Pour obtenir les chemins de répertoires (moins utilisé dans cette version simplifiée)
+  share_plus: ^7.0.2 # Pour le partage de texte
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  #  fonts:
+  #    - family: Inter
+  #      fonts:
+  #        - asset: fonts/Inter-Regular.ttf
+  #        - asset: fonts/Inter-Bold.ttf
+  #          weight: 700
