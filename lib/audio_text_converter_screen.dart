@@ -5,6 +5,28 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AudioText Converter',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blue)
+            .copyWith(secondary: Colors.orange),
+        fontFamily: 'Roboto',
+      ),
+      home: const AudioTextConverterScreen(),
+    );
+  }
+}
+
 class AudioTextConverterScreen extends StatefulWidget {
   const AudioTextConverterScreen({super.key});
 
@@ -18,13 +40,47 @@ class _AudioTextConverterScreenState extends State<AudioTextConverterScreen>
   final SpeechToText _speechToText = SpeechToText();
   bool _isListening = false;
   String _transcribedText = '';
-  List<LocaleName> _localeNames = [];
+  List<LocaleName> _localeNames = [
+    LocaleName('fr-FR', 'Français'),
+    LocaleName('en-US', 'Anglais (États-Unis)'),
+    LocaleName('es-ES', 'Espagnol (Espagne)'),
+    LocaleName('de-DE', 'Allemand (Allemagne)'),
+    LocaleName('it-IT', 'Italien (Italie)'),
+    LocaleName('pt-PT', 'Portugais (Portugal)'),
+    LocaleName('ru-RU', 'Russe (Russie)'),
+    LocaleName('zh-CN', 'Chinois (Chine)'),
+  ];
+
   String? _currentLocaleId;
 
   final FlutterTts _flutterTts = FlutterTts();
   String _textToSpeak = '';
   bool _isSpeaking = false;
-  List<dynamic> _voices = [];
+  List<dynamic> _voices = [
+    {'name': 'fr-FR', 'locale': 'fr-FR'},
+    {'name': 'en-US', 'locale': 'en-US'},
+    {'name': 'es-ES', 'locale': 'es-ES'},
+    {'name': 'de-DE', 'locale': 'de-DE'},
+    {'name': 'it-IT', 'locale': 'it-IT'},
+    {'name': 'pt-PT', 'locale': 'pt-PT'},
+    {'name': 'ru-RU', 'locale': 'ru-RU'},
+    {'name': 'zh-CN', 'locale': 'zh-CN'},
+    {'name': 'ja-JP', 'locale': 'ja-JP'},
+    {'name': 'ko-KR', 'locale': 'ko-KR'},
+    {'name': 'ar-SA', 'locale': 'ar-SA'},
+    {'name': 'nl-NL', 'locale': 'nl-NL'},
+    {'name': 'sv-SE', 'locale': 'sv-SE'},
+    {'name': 'da-DK', 'locale': 'da-DK'},
+    {'name': 'fi-FI', 'locale': 'fi-FI'},
+    {'name': 'no-NO', 'locale': 'no-NO'},
+    {'name': 'pl-PL', 'locale': 'pl-PL'},
+    {'name': 'tr-TR', 'locale': 'tr-TR'},
+    {'name': 'th-TH', 'locale': 'th-TH'},
+    {'name': 'vi-VN', 'locale': 'vi-VN'},
+    {'name': 'hi-IN', 'locale': 'hi-IN'},
+    {'name': 'bn-BD', 'locale': 'bn-BD'},
+  ];
+
   String? _currentVoiceId;
   String? _currentTtsLanguage;
 
@@ -39,113 +95,34 @@ class _AudioTextConverterScreenState extends State<AudioTextConverterScreen>
     _requestPermissions();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _speechToText.stop(); // Arrête l'écoute STT si elle est active
-    _flutterTts.stop(); // Arrête la synthèse vocale si elle est active
-    super.dispose();
-  }
-
-  // --- Gestion des Permissions ---
-  /// Demande les permissions nécessaires (microphone et stockage).
-  Future<void> _requestPermissions() async {
-    // Demande la permission du microphone
-    PermissionStatus micStatus = await Permission.microphone.request();
-    if (micStatus.isDenied) {
-      // Gère la permission refusée
-      _showMessage(
-          'Permission microphone refusée. Veuillez l\'activer dans les paramètres.');
-      return;
-    }
-    if (micStatus.isPermanentlyDenied) {
-      // Ouvre les paramètres de l'application si la permission est refusée de manière permanente
-      openAppSettings();
-      return;
-    }
-
-    // Demande la permission de stockage (pour la sauvegarde de fichiers, bien que la sauvegarde audio soit complexe avec flutter_tts)
-    // Pour Android 10 (API 29) et supérieur, WRITE_EXTERNAL_STORAGE est déprécié.
-    // Pour iOS, l'accès aux fichiers est généralement géré par des répertoires d'application spécifiques.
-    // Pour la simplicité, nous la demanderons mais noterons son utilisation limitée avec la configuration TTS actuelle.
-    PermissionStatus storageStatus = await Permission.storage.request();
-    if (storageStatus.isDenied) {
-      _showMessage(
-          'Permission de stockage refusée. Le partage pourrait être limité.');
-    }
-  }
-
-  // --- Initialisation et Logique Speech-to-Text ---
-  /// Initialise le service Speech-to-Text.
+  // --- Speech to Text Initialization ---
   Future<void> _initSpeechToText() async {
-    bool available = await _speechToText.initialize(
-      onError: (val) => setState(() {
-        _isListening = false;
-        _showMessage('Erreur STT: ${val.errorMsg}');
-      }),
-      onStatus: (val) => setState(() {
-        if (val == 'listening') {
-          _isListening = true;
-        } else if (val == 'notListening') {
-          _isListening = false;
-        }
-      }),
-    );
-    if (available) {
-      // Récupère les locales disponibles et définit la locale par défaut (français si disponible)
-      _localeNames = await _speechToText.locales();
-      setState(() {
-        _currentLocaleId = _localeNames
-            .firstWhere((locale) => locale.localeId.startsWith('fr'),
-                orElse: () => _localeNames.first)
-            .localeId;
-      });
-    } else {
-      _showMessage(
-          'Le service Speech-to-Text n\'est pas disponible sur cet appareil.');
-    }
-  }
-
-  /// Démarre l'écoute pour la transcription en temps réel.
-  void _startListening() async {
-    if (_speechToText.isAvailable && !_isListening) {
-      await _speechToText.listen(
-        onResult: (result) {
+    await _speechToText.initialize(
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
           setState(() {
-            _transcribedText = result.recognizedWords;
+            _isListening = false;
           });
-        },
-        localeId: _currentLocaleId, // Utilise la locale sélectionnée
-        listenFor:
-            const Duration(seconds: 30), // Écoute pendant 30 secondes maximum
-        pauseFor: const Duration(
-            seconds: 3), // Met en pause si pas de parole pendant 3 secondes
-        partialResults:
-            true, // Affiche les résultats partiels au fur et à mesure
-      );
-      setState(() {
-        _isListening = true;
-        _transcribedText = ''; // Efface le texte précédent
-      });
-    } else if (_isListening) {
-      _stopListening(); // Si déjà en écoute, arrête l'écoute
-    } else {
-      _showMessage('STT non disponible ou déjà en cours.');
-    }
-  }
-
-  /// Arrête l'écoute pour la transcription.
-  void _stopListening() async {
-    await _speechToText.stop();
+        }
+      },
+      onError: (error) {
+        setState(() {
+          _isListening = false;
+        });
+      },
+    );
     setState(() {
-      _isListening = false;
+      _currentLocaleId = _localeNames.first.localeId;
     });
   }
 
-  // --- Initialisation et Logique Text-to-Speech ---
-  /// Initialise le service Text-to-Speech.
+  // --- Text to Speech Initialization ---
   Future<void> _initTextToSpeech() async {
-    // Gère les événements de début, de fin et d'erreur de la synthèse vocale
+    await _flutterTts.setLanguage(_voices.first['locale']);
+    setState(() {
+      _currentTtsLanguage = _voices.first['locale'];
+      _currentVoiceId = _voices.first['name'];
+    });
     _flutterTts.setStartHandler(() {
       setState(() {
         _isSpeaking = true;
@@ -159,59 +136,65 @@ class _AudioTextConverterScreenState extends State<AudioTextConverterScreen>
     _flutterTts.setErrorHandler((msg) {
       setState(() {
         _isSpeaking = false;
-        _showMessage('Erreur TTS: $msg');
       });
     });
-
-    // Récupère les voix et langues disponibles
-    _voices = await _flutterTts.getVoices;
-    // Définit la langue par défaut (français si disponible, sinon la première langue trouvée)
-    String defaultLanguage = 'fr-FR';
-    if (_voices.isNotEmpty) {
-      defaultLanguage = _voices.first['locale'] ?? 'fr-FR';
-    }
-    _currentTtsLanguage = defaultLanguage;
-    await _flutterTts.setLanguage(defaultLanguage);
-    _currentVoiceId = await _flutterTts.getDefaultVoice;
-
-    setState(() {
-      // Filtre les voix par la langue actuelle si possible, sinon prend la première
-      if (_currentTtsLanguage != null) {
-        _voices = _voices
-            .where((voice) =>
-                voice['locale'].toString().startsWith(_currentTtsLanguage!))
-            .toList();
-        if (_voices.isNotEmpty) {
-          _currentVoiceId = _voices[0]
-              ['name']; // Définit la première voix disponible pour la langue
-        }
-      }
-    });
-
-    // Définit la langue et la voix par défaut
-    if (_currentTtsLanguage != null) {
-      await _flutterTts.setLanguage(_currentTtsLanguage!);
-    }
-    if (_currentVoiceId != null) {
-      await _flutterTts.setVoice(
-          {'name': _currentVoiceId ?? '', 'locale': _currentTtsLanguage ?? ''});
-    }
-
-    await _flutterTts.setSpeechRate(0.5); // Vitesse de parole normale
-    await _flutterTts.setVolume(1.0); // Volume maximum
-    await _flutterTts.setPitch(1.0); // Hauteur de la voix normale
   }
 
-  /// Déclenche la synthèse vocale du texte saisi.
+  // --- Permissions ---
+  Future<void> _requestPermissions() async {
+    await Permission.microphone.request();
+    await Permission.speech.request();
+  }
+
+  // --- Start Listening ---
+  Future<void> _startListening() async {
+    if (!_isListening) {
+      await _speechToText.listen(
+        localeId: _currentLocaleId ?? _localeNames.first.localeId,
+        onResult: (result) {
+          setState(() {
+            _transcribedText = result.recognizedWords;
+          });
+        },
+      );
+      setState(() {
+        _isListening = true;
+      });
+    } else {
+      await _speechToText.stop();
+      setState(() {
+        _isListening = false;
+      });
+    }
+  }
+
+  // --- Copy Text ---
+  Future<void> _copyText(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Texte copié dans le presse-papiers')),
+    );
+  }
+
+  // --- Share Text ---
+  Future<void> _shareText(String text) async {
+    await Share.share(text);
+  }
+
+  // --- Speak ---
   Future<void> _speak() async {
     if (_textToSpeak.isNotEmpty) {
+      await _flutterTts
+          .setLanguage(_currentTtsLanguage ?? _voices.first['locale']);
+      await _flutterTts.setVoice({
+        'name': _currentVoiceId ?? _voices.first['name'],
+        'locale': _currentTtsLanguage ?? _voices.first['locale']
+      });
       await _flutterTts.speak(_textToSpeak);
-    } else {
-      _showMessage('Veuillez entrer du texte à convertir en audio.');
     }
   }
 
-  /// Arrête la synthèse vocale.
+  // --- Stop Speaking ---
   Future<void> _stopSpeaking() async {
     await _flutterTts.stop();
     setState(() {
@@ -219,169 +202,143 @@ class _AudioTextConverterScreenState extends State<AudioTextConverterScreen>
     });
   }
 
-  // --- Fonctions Utilitaires ---
-  /// Affiche un message temporaire (SnackBar) à l'utilisateur.
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  /// Copie le texte donné dans le presse-papiers.
-  Future<void> _copyText(String text) async {
-    if (text.isNotEmpty) {
-      await Clipboard.setData(ClipboardData(text: text));
-      _showMessage('Texte copié dans le presse-papiers.');
-    } else {
-      _showMessage('Aucun texte à copier.');
-    }
-  }
-
-  /// Partage le texte donné via les options de partage de l'appareil.
-  Future<void> _shareText(String text) async {
-    if (text.isNotEmpty) {
-      await Share.share(text);
-    } else {
-      _showMessage('Aucun texte à partager.');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-            'AudioText Converter'), // Titre de la barre d'applications
+        title: const Text('AudioText Converter'),
         bottom: TabBar(
-          controller: _tabController, // Contrôleur pour les onglets
+          controller: _tabController,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.blueAccent,
+          ),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.grey,
           tabs: const [
-            Tab(
-                icon: Icon(Icons.mic),
-                text: 'Audio vers Texte'), // Onglet pour la transcription
-            Tab(
-                icon: Icon(Icons.text_fields),
-                text: 'Texte vers Audio'), // Onglet pour la synthèse vocale
+            Tab(icon: Icon(Icons.mic), text: 'Audio vers Texte'),
+            Tab(icon: Icon(Icons.text_fields), text: 'Texte vers Audio'),
           ],
         ),
       ),
       body: TabBarView(
-        controller: _tabController, // Vue des onglets
+        controller: _tabController,
         children: [
-          // --- Onglet 1: Audio vers Texte ---
           _buildAudioToTextTab(),
-          // --- Onglet 2: Texte vers Audio ---
           _buildTextToAudioTab(),
         ],
       ),
     );
   }
 
-  /// Construit l'interface utilisateur pour l'onglet "Audio vers Texte".
   Widget _buildAudioToTextTab() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Sélection de la langue pour STT
-          DropdownButtonFormField<String>(
-            value: _currentLocaleId,
-            decoration: const InputDecoration(
-              labelText: 'Langue de transcription',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12.0)),
-              ),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey),
             ),
-            items: _localeNames
-                .map((locale) => DropdownMenuItem(
-                      value: locale.localeId,
-                      child: Text(locale.name),
-                    ))
-                .toList(),
-            onChanged: (newValue) {
-              setState(() {
-                _currentLocaleId = newValue;
-              });
-            },
+            padding: const EdgeInsets.all(8.0),
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Langue de transcription',
+                border: InputBorder.none,
+              ),
+              value: _currentLocaleId,
+              items: _localeNames
+                  .map((locale) => DropdownMenuItem(
+                        value: locale.localeId,
+                        child: Text(locale.name),
+                      ))
+                  .toList(),
+              onChanged: (newValue) {
+                setState(() {
+                  _currentLocaleId = newValue;
+                });
+              },
+            ),
           ),
           const SizedBox(height: 20),
-          // Bouton Enregistrer/Arrêter
           ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(150, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: _speechToText.isAvailable ? _startListening : null,
             icon: Icon(_isListening ? Icons.stop : Icons.mic),
             label:
                 Text(_isListening ? 'Arrêter l\'écoute' : 'Démarrer l\'écoute'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              backgroundColor:
-                  _isListening ? Colors.redAccent : Colors.blueAccent,
-              foregroundColor: Colors.white,
-              textStyle:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
           ),
           const SizedBox(height: 20),
-          // Affichage du texte transcrit
           Expanded(
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SingleChildScrollView(
-                  child: Text(
-                    _transcribedText.isEmpty
-                        ? 'Le texte transcrit apparaîtra ici...'
-                        : _transcribedText,
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: _transcribedText.isEmpty
-                            ? const Color.fromARGB(255, 168, 52, 52)
-                            : const Color.fromARGB(255, 224, 191, 191)),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey),
+              ),
+              padding: const EdgeInsets.all(16.0),
+              child: SingleChildScrollView(
+                child: Text(
+                  _transcribedText.isEmpty
+                      ? 'Le texte transcrit apparaîtra ici...'
+                      : _transcribedText,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color:
+                        _transcribedText.isEmpty ? Colors.grey : Colors.black,
                   ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          // Boutons d'action
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Expanded(
                 child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(100, 40),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                   onPressed: _transcribedText.isNotEmpty
                       ? () => _copyText(_transcribedText)
                       : null,
                   icon: const Icon(Icons.copy),
                   label: const Text('Copier'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(100, 40),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                   onPressed: _transcribedText.isNotEmpty
                       ? () => _shareText(_transcribedText)
                       : null,
                   icon: const Icon(Icons.share),
                   label: const Text('Partager'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
                 ),
               ),
             ],
@@ -391,127 +348,108 @@ class _AudioTextConverterScreenState extends State<AudioTextConverterScreen>
     );
   }
 
-  /// Construit l'interface utilisateur pour l'onglet "Texte vers Audio".
   Widget _buildTextToAudioTab() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Champ de saisie de texte
-          TextField(
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Entrez le texte à convertir en audio',
-              hintText: 'Tapez ou collez votre texte ici...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12.0)),
-              ),
-              alignLabelWithHint: true,
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey),
             ),
-            onChanged: (text) {
-              setState(() {
-                _textToSpeak = text;
-              });
-            },
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Entrez le texte à convertir en audio',
+                border: InputBorder.none,
+              ),
+              onChanged: (text) {
+                setState(() {
+                  _textToSpeak = text;
+                });
+              },
+            ),
           ),
           const SizedBox(height: 20),
-          // Sélection de la langue pour TTS
-          DropdownButtonFormField<String>(
-            value: _currentTtsLanguage,
-            decoration: const InputDecoration(
-              labelText: 'Langue de la synthèse vocale',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12.0)),
-              ),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey),
             ),
-            items: _voices
-                .map<String>((voice) =>
-                    voice['locale'].toString()) // Récupère les locales uniques
-                .toSet() // Assure l'unicité
-                .map<DropdownMenuItem<String>>(
-                    (locale) => DropdownMenuItem<String>(
-                          value: locale,
-                          child: Text(locale),
-                        ))
-                .toList(),
-            onChanged: (newValue) async {
-              setState(() {
-                _currentTtsLanguage = newValue;
-                // Filtre les voix pour la nouvelle langue
-                _voices = _voices
-                    .where((voice) => voice['locale'].toString() == newValue)
-                    .toList();
-                if (_voices.isNotEmpty) {
-                  _currentVoiceId = _voices[0][
-                      'name']; // Définit la première voix pour la nouvelle langue
-                } else {
-                  _currentVoiceId = null;
+            padding: const EdgeInsets.all(8.0),
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Langue de la synthèse vocale',
+                border: InputBorder.none,
+              ),
+              value: _currentTtsLanguage,
+              items: _voices
+                  .map<String>((voice) => voice['locale'].toString())
+                  .toSet()
+                  .map<DropdownMenuItem<String>>(
+                      (locale) => DropdownMenuItem<String>(
+                            value: locale,
+                            child: Text(locale),
+                          ))
+                  .toList(),
+              onChanged: (newValue) async {
+                setState(() {
+                  _currentTtsLanguage = newValue;
+                });
+                if (newValue != null) {
+                  await _flutterTts.setLanguage(newValue);
                 }
-              });
-              if (newValue != null) {
-                await _flutterTts.setLanguage(newValue);
-                if (_currentVoiceId != null) {
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey),
+            ),
+            padding: const EdgeInsets.all(8.0),
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Voix',
+                border: InputBorder.none,
+              ),
+              value: _currentVoiceId,
+              items: _voices
+                  .map<DropdownMenuItem<String>>((voice) =>
+                      DropdownMenuItem<String>(
+                        value: voice['name'] as String,
+                        child: Text('${voice['name']} (${voice['locale']})'),
+                      ))
+                  .toList(),
+              onChanged: (newValue) async {
+                setState(() {
+                  _currentVoiceId = newValue;
+                });
+                if (newValue != null && _currentTtsLanguage != null) {
                   await _flutterTts.setVoice(
-                      {'name': _currentVoiceId ?? '', 'locale': newValue});
+                      {'name': newValue, 'locale': _currentTtsLanguage ?? ''});
                 }
-              }
-            },
+              },
+            ),
           ),
           const SizedBox(height: 20),
-          // Sélection de la voix pour TTS
-          DropdownButtonFormField<String>(
-            value: _currentVoiceId,
-            decoration: const InputDecoration(
-              labelText: 'Voix',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12.0)),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(150, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            items: _voices
-                .map<DropdownMenuItem<String>>(
-                    (voice) => DropdownMenuItem<String>(
-                          value: voice['name'] as String,
-                          child: Text('${voice['name']} (${voice['locale']})'),
-                        ))
-                .toList(),
-            onChanged: (newValue) async {
-              setState(() {
-                _currentVoiceId = newValue;
-              });
-              if (newValue != null && _currentTtsLanguage != null) {
-                await _flutterTts.setVoice(
-                    {'name': newValue, 'locale': _currentTtsLanguage ?? ''});
-              }
-            },
-          ),
-          const SizedBox(height: 20),
-          // Bouton Écouter/Arrêter
-          ElevatedButton.icon(
             onPressed: _textToSpeak.isNotEmpty
                 ? (_isSpeaking ? _stopSpeaking : _speak)
                 : null,
             icon: Icon(_isSpeaking ? Icons.stop : Icons.volume_up),
             label:
                 Text(_isSpeaking ? 'Arrêter la lecture' : 'Écouter le texte'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              backgroundColor:
-                  _isSpeaking ? Colors.redAccent : Colors.blueAccent,
-              foregroundColor: Colors.white,
-              textStyle:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Note sur la sauvegarde/partage de l'audio
-          const Text(
-            'La sauvegarde et le partage de l\'audio généré ne sont pas directement supportés par cette implémentation locale de TTS. '
-            'Cela nécessiterait une intégration avec des services cloud ou des fonctionnalités spécifiques à la plateforme.',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
